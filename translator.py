@@ -59,11 +59,11 @@ class TranslationPanel:
         scroll_view.setDocumentView_(self.text_view)
         self.panel.contentView().addSubview_(scroll_view)
 
-    def show(self, text, original_text=""):
+    def show(self, text, original_text="", font_size=14):
         final_str = NSMutableAttributedString.alloc().init()
         
         attrs_result = {
-            NSFontAttributeName: NSFont.systemFontOfSize_(16),
+            NSFontAttributeName: NSFont.systemFontOfSize_(font_size),
             NSForegroundColorAttributeName: NSColor.whiteColor()
         }
         str_result = NSAttributedString.alloc().initWithString_attributes_(text + "\n", attrs_result)
@@ -135,9 +135,9 @@ class TranslatorApp(rumps.App):
         msg = "Hướng dẫn cấp quyền để app hoạt động:\n\n"
         msg += "👉 Vào System Settings -> Privacy & Security -> Cấp quyền cho 'Selection Translator' (hoặc app chạy code) cho 2 mục sau:\n\n"
         msg += "1. Accessibility (Trợ năng):\n   -> Để App tự động Copy văn bản.\n\n"
-        msg += "2. Input Monitoring (Giám sát đầu vào):\n   -> Để App nhận được phím tắt.\n\n"
+        msg += "2. Input Monitoring (Giám sát đầu vào):\n   -> Để App nhận được phím tắt (Command+Ctrl+S).\n\n"
         msg += "Nếu không cấp quyền, app sẽ không hoạt động!"
-        self.floating_panel.show(msg)
+        self.floating_panel.show(msg, font_size=12.5)
 
     def perform_translation(self):
         print("\n--- Đang bắt đầu dịch ---")
@@ -148,7 +148,7 @@ class TranslatorApp(rumps.App):
         pyperclip.copy("")
         time.sleep(0.1)
         
-        print("DEBUG: Đang gửi lệnh Cmd+C (pynput)...")
+        print("DEBUG: Đang gửi lệnh Command+C (pynput)...")
         from pynput.keyboard import Key, Controller
         keyboard = Controller()
         with keyboard.pressed(Key.cmd):
@@ -193,10 +193,21 @@ class TranslatorApp(rumps.App):
             self.perform_translation()
 
 def start_hotkey_listener(callback):
-    with keyboard.GlobalHotKeys({
-            '<cmd>+<shift>+t': callback,
-            '<cmd>+T': callback}) as h:
-        h.join()
+    def on_activate():
+        callback()
+
+    def for_canonical(f):
+        return lambda k: f(l.canonical(k))
+
+    hotkey = keyboard.HotKey(
+        keyboard.HotKey.parse('<cmd>+<ctrl>+s'),
+        on_activate
+    )
+
+    with keyboard.Listener(
+            on_press=for_canonical(hotkey.press),
+            on_release=for_canonical(hotkey.release)) as l:
+        l.join()
 
 if __name__ == "__main__":
     app = TranslatorApp()
