@@ -10,7 +10,8 @@ from AppKit import (
     NSWindowStyleMaskNonactivatingPanel, NSFloatingWindowLevel,
     NSBackingStoreBuffered, NSMakeRect, NSScreen, NSColor, NSFont,
     NSTextView, NSScrollView, NSNoBorder, NSEvent, NSApplication,
-    NSWindowStyleMaskTitled, NSWindowStyleMaskClosable
+    NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
+    NSTextAlignmentLeft
 )
 
 # --- Class giao diện Floating Window ---
@@ -50,6 +51,7 @@ class TranslationPanel:
         self.text_view.setTextColor_(NSColor.whiteColor())
         self.text_view.setFont_(NSFont.systemFontOfSize_(14))
         self.text_view.setBackgroundColor_(NSColor.clearColor())
+        self.text_view.setAlignment_(NSTextAlignmentLeft) # Fix lỗi giãn chữ
         self.text_view.setEditable_(False) # Không cho sửa
         self.text_view.setSelectable_(True) # Cho phép copy lại
         self.text_view.setVerticallyResizable_(True)
@@ -60,8 +62,11 @@ class TranslationPanel:
         self.panel.contentView().addSubview_(scroll_view)
 
     def show(self, text, original_text=""):
-        # Định dạng văn bản: Tiếng Việt ở trên, Gốc ở dưới nhỏ hơn
-        full_content = f"{text}\n\n----------------\n[Original]:\n{original_text}"
+        # Nếu có văn bản gốc thì hiện ngăn cách, không thì chỉ hiện text chính (dùng cho thông báo/lỗi)
+        if original_text:
+            full_content = f"{text}\n\n----------------\n[Original]:\n{original_text}"
+        else:
+            full_content = text
         self.text_view.setString_(full_content)
         
         # Reset scroll về đầu trang (Dùng NSMakeRange thay vì NSMakeRect)
@@ -92,7 +97,7 @@ class TranslationPanel:
 class TranslatorApp(rumps.App):
     def __init__(self):
         super(TranslatorApp, self).__init__("🇻🇳")
-        self.menu = ["Dịch văn bản", "Đóng cửa sổ dịch", "Hướng dẫn quyền", "Thoát"]
+        self.menu = ["Dịch văn bản", "Đóng cửa sổ dịch", "Hướng dẫn quyền"]
         self.translator = GoogleTranslator(source='auto', target='vi')
         self.trigger_translation = False
         self.floating_panel = None # Khởi tạo sau để tránh lỗi luồng
@@ -112,13 +117,13 @@ class TranslatorApp(rumps.App):
 
     @rumps.clicked("Hướng dẫn quyền")
     def help_perm(self, _):
-        msg = "1. Accessibility: Bật cho Cursor/Terminal\n"
-        msg += "2. Mẹo: Bôi đen -> Cmd+Shift+T"
-        rumps.alert("Hướng dẫn", msg)
-
-    @rumps.clicked("Thoát")
-    def quit_app(self, _):
-        rumps.quit_application()
+        self.ensure_panel()
+        msg = "Hướng dẫn cấp quyền để app hoạt động:\n\n"
+        msg += "👉 Vào System Settings -> Privacy & Security -> Cấp quyền cho 'Selection Translator' (hoặc app chạy code) cho 2 mục sau:\n\n"
+        msg += "1. Accessibility (Trợ năng):\n   -> Để App tự động Copy văn bản.\n\n"
+        msg += "2. Input Monitoring (Giám sát đầu vào):\n   -> Để App nhận được phím tắt.\n\n"
+        msg += "Nếu không cấp quyền, app sẽ không hoạt động!"
+        self.floating_panel.show(msg)
 
     def perform_translation(self):
         print("\n--- Đang bắt đầu dịch ---")
@@ -155,7 +160,7 @@ class TranslatorApp(rumps.App):
                 text = old_text.strip()
             else:
                 self.ensure_panel()
-                self.floating_panel.show("Không lấy được văn bản.\n\nHãy vào System Settings -> Privacy & Security -> Accessibility và cấp quyền cho ứng dụng này.", "ERROR")
+                self.floating_panel.show("⚠️ Không lấy được văn bản.\n\nVui lòng kiểm tra lại quyền:\n1. Accessibility\n2. Input Monitoring\n\n(Click menu 'Hướng dẫn quyền' để xem chi tiết)", "")
                 return
 
         try:
@@ -168,7 +173,7 @@ class TranslatorApp(rumps.App):
             
         except Exception as e:
             self.ensure_panel()
-            self.floating_panel.show(f"Lỗi: {str(e)}", "ERROR")
+            self.floating_panel.show(f"Lỗi: {str(e)}", "")
 
     def on_hotkey_signal(self):
         self.trigger_translation = True
