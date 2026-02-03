@@ -11,13 +11,12 @@ from AppKit import (
     NSBackingStoreBuffered, NSMakeRect, NSScreen, NSColor, NSFont,
     NSTextView, NSScrollView, NSNoBorder, NSEvent, NSApplication,
     NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
-    NSTextAlignmentLeft
+    NSTextAlignmentLeft, NSAttributedString, NSMutableAttributedString,
+    NSFontAttributeName, NSForegroundColorAttributeName, NSSize
 )
 
-# --- Class giao diện Floating Window ---
 class TranslationPanel:
     def __init__(self):
-        # Tạo cửa sổ kiểu HUD + Có tiêu đề (để kéo) + Có nút đóng
         mask = (NSWindowStyleMaskHUDWindow | 
                 NSWindowStyleMaskUtilityWindow | 
                 NSWindowStyleMaskNonactivatingPanel |
@@ -30,61 +29,76 @@ class TranslationPanel:
             NSBackingStoreBuffered,
             False
         )
-        self.panel.setLevel_(NSFloatingWindowLevel) # Luôn nổi trên cùng
+        self.panel.setLevel_(NSFloatingWindowLevel)
         self.panel.setHidesOnDeactivate_(False)
-        self.panel.setBackgroundColor_(NSColor.colorWithWhite_alpha_(0.1, 0.9)) # Màu nền tối
-        self.panel.setTitle_("Selection Translator") # Tiêu đề
-        self.panel.setMovableByWindowBackground_(True) # Cho phép kéo bằng cách giữ nền (tiện hơn)
+        self.panel.setBackgroundColor_(NSColor.colorWithWhite_alpha_(0.1, 0.9))
+        self.panel.setTitle_("Selection Translator")
+        self.panel.setMovableByWindowBackground_(True)
         
-        # Scroll View để chứa văn bản dài
         scroll_view = NSScrollView.alloc().initWithFrame_(NSMakeRect(10, 10, 380, 230))
         scroll_view.setHasVerticalScroller_(True)
         scroll_view.setBorderType_(NSNoBorder)
         scroll_view.setDrawsBackground_(False)
         
-        # Text View hiển thị nội dung
-        # Lấy kích thước scroll view để tạo frame cho text view
         content_size = scroll_view.contentSize()
         text_frame = NSMakeRect(0, 0, content_size.width, content_size.height)
         
         self.text_view = NSTextView.alloc().initWithFrame_(text_frame)
+        from AppKit import NSSize
+        self.text_view.setTextContainerInset_(NSSize(5, 5))
         self.text_view.setTextColor_(NSColor.whiteColor())
-        self.text_view.setFont_(NSFont.systemFontOfSize_(14))
+        self.text_view.setFont_(NSFont.systemFontOfSize_(15))
         self.text_view.setBackgroundColor_(NSColor.clearColor())
-        self.text_view.setAlignment_(NSTextAlignmentLeft) # Fix lỗi giãn chữ
-        self.text_view.setEditable_(False) # Không cho sửa
-        self.text_view.setSelectable_(True) # Cho phép copy lại
+        self.text_view.setAlignment_(NSTextAlignmentLeft)
+        self.text_view.setEditable_(False)
+        self.text_view.setSelectable_(True)
         self.text_view.setVerticallyResizable_(True)
-        self.text_view.setHorizontallyResizable_(False) # Bắt buộc xuống dòng
-        self.text_view.textContainer().setWidthTracksTextView_(True) # Wrap theo chiều ngang
+        self.text_view.setHorizontallyResizable_(False)
+        self.text_view.textContainer().setWidthTracksTextView_(True)
         
         scroll_view.setDocumentView_(self.text_view)
         self.panel.contentView().addSubview_(scroll_view)
 
     def show(self, text, original_text=""):
-        # Nếu có văn bản gốc thì hiện ngăn cách, không thì chỉ hiện text chính (dùng cho thông báo/lỗi)
-        if original_text:
-            full_content = f"{text}\n\n----------------\n[Original]:\n{original_text}"
-        else:
-            full_content = text
-        self.text_view.setString_(full_content)
+        final_str = NSMutableAttributedString.alloc().init()
         
-        # Reset scroll về đầu trang (Dùng NSMakeRange thay vì NSMakeRect)
+        attrs_result = {
+            NSFontAttributeName: NSFont.systemFontOfSize_(16),
+            NSForegroundColorAttributeName: NSColor.whiteColor()
+        }
+        str_result = NSAttributedString.alloc().initWithString_attributes_(text + "\n", attrs_result)
+        final_str.appendAttributedString_(str_result)
+        
+        if original_text:
+            final_str.appendAttributedString_(NSAttributedString.alloc().initWithString_("\n"))
+            
+            attrs_label = {
+                NSFontAttributeName: NSFont.systemFontOfSize_(10),
+                NSForegroundColorAttributeName: NSColor.colorWithWhite_alpha_(0.9, 1.0)
+            }
+            str_label = NSAttributedString.alloc().initWithString_attributes_("ORIGINAL CONTENT:\n", attrs_label)
+            final_str.appendAttributedString_(str_label)
+            
+            attrs_orig = {
+                NSFontAttributeName: NSFont.systemFontOfSize_(13),
+                NSForegroundColorAttributeName: NSColor.colorWithWhite_alpha_(0.9, 1.0)
+            }
+            str_orig = NSAttributedString.alloc().initWithString_attributes_(original_text, attrs_orig)
+            final_str.appendAttributedString_(str_orig)
+
+        self.text_view.textStorage().setAttributedString_(final_str)
+        
         from AppKit import NSMakeRange
         self.text_view.scrollRangeToVisible_(NSMakeRange(0, 0))
         
-        # Lấy vị trí chuột hiện tại
         mouse_loc = NSEvent.mouseLocation()
         
-        # Tính toán vị trí cửa sổ (cạnh chuột)
-        # Lưu ý: Hệ tọa độ Y của macOS bị ngược (gốc ở dưới cùng), nhưng mouseLocation cũng trả về như vậy nên ta dùng luôn.
         x = mouse_loc.x + 20
-        y = mouse_loc.y - 250 # Dịch lên trên một chút để không bị che
+        y = mouse_loc.y - 250 
         
-        # Đảm bảo không bay ra ngoài màn hình
         screen_frame = NSScreen.mainScreen().frame()
         if x + 400 > screen_frame.size.width:
-            x = mouse_loc.x - 420 # Nếu sát lề phải thì hiển thị sang trái
+            x = mouse_loc.x - 420 
         if y < 0:
             y = 20
             
@@ -100,7 +114,7 @@ class TranslatorApp(rumps.App):
         self.menu = ["Dịch văn bản", "Đóng cửa sổ dịch", "Hướng dẫn quyền"]
         self.translator = GoogleTranslator(source='auto', target='vi')
         self.trigger_translation = False
-        self.floating_panel = None # Khởi tạo sau để tránh lỗi luồng
+        self.floating_panel = None 
 
     def ensure_panel(self):
         if not self.floating_panel:
@@ -128,15 +142,12 @@ class TranslatorApp(rumps.App):
     def perform_translation(self):
         print("\n--- Đang bắt đầu dịch ---")
         
-        # 1. Đợi người dùng thả phím tắt
         time.sleep(0.3)
         
-        # 2. Xóa clipboard
         old_text = pyperclip.paste()
         pyperclip.copy("")
         time.sleep(0.1)
         
-        # 3. Gửi lệnh Cmd+C bằng pynput
         print("DEBUG: Đang gửi lệnh Cmd+C (pynput)...")
         from pynput.keyboard import Key, Controller
         keyboard = Controller()
@@ -144,7 +155,6 @@ class TranslatorApp(rumps.App):
             keyboard.press('c')
             keyboard.release('c')
             
-        # 4. Đợi văn bản mới
         text = ""
         for i in range(15):
             time.sleep(0.1)
@@ -153,7 +163,6 @@ class TranslatorApp(rumps.App):
                 print(f"DEBUG: Tự động Copy thành công sau {i/10}s")
                 break
         
-        # 5. Fallback
         if not text:
             if old_text and old_text.strip() and "DEBUG:" not in old_text:
                 print("DEBUG: Fallback - Sử dụng văn bản cũ.")
@@ -167,7 +176,6 @@ class TranslatorApp(rumps.App):
             print(f"DEBUG: Đang dịch...")
             translated = self.translator.translate(text)
             
-            # HIỂN THỊ FLOATING PANEL (Full text)
             self.ensure_panel()
             self.floating_panel.show(translated, text)
             
