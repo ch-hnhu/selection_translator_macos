@@ -5,6 +5,8 @@ from deep_translator import GoogleTranslator
 import time
 import threading
 import os
+import sys
+import certifi
 from AppKit import (
     NSPanel, NSWindowStyleMaskHUDWindow, NSWindowStyleMaskUtilityWindow,
     NSWindowStyleMaskNonactivatingPanel, NSFloatingWindowLevel,
@@ -112,6 +114,12 @@ class TranslatorApp(rumps.App):
     def __init__(self):
         super(TranslatorApp, self).__init__("🇻🇳")
         self.menu = ["Dịch văn bản", "Đóng cửa sổ dịch", "Hướng dẫn quyền"]
+        
+        # Fix SSL certificate path for frozen app
+        if getattr(sys, 'frozen', False):
+            os.environ['SSL_CERT_FILE'] = certifi.where()
+            os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
+        
         self.translator = GoogleTranslator(source='auto', target='vi')
         self.trigger_translation = False
         self.floating_panel = None 
