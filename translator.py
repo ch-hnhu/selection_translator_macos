@@ -114,34 +114,15 @@ class TranslatorApp(rumps.App):
     def __init__(self):
         super(TranslatorApp, self).__init__("🇻🇳")
         self.menu = ["Dịch văn bản", "Đóng cửa sổ dịch", "Hướng dẫn quyền"]
-        
-        # Fix SSL certificate path for frozen app
-        if getattr(sys, 'frozen', False):
-            # Get the path where PyInstaller extracts bundled files
-            if hasattr(sys, '_MEIPASS'):
-                # _MEIPASS is the temp directory where PyInstaller extracts files (onefile mode)
-                certifi_base_path = sys._MEIPASS
-            else:
-                # Onedir mode: executable is in dist/Selection Translator/
-                # and _internal folder is next to it
-                certifi_base_path = os.path.join(os.path.dirname(sys.executable), '_internal')
-            
-            # Point to the cacert.pem inside the certifi folder
-            cert_file = os.path.join(certifi_base_path, 'certifi', 'cacert.pem')
-            
-            # Check if the cert file exists at the expected location
-            if os.path.exists(cert_file):
-                os.environ['SSL_CERT_FILE'] = cert_file
-                os.environ['REQUESTS_CA_BUNDLE'] = cert_file
-                print(f"DEBUG: SSL_CERT_FILE set to: {cert_file}")
-            else:
-                # Fallback: try certifi.where() which may work if certifi module is available
-                try:
-                    os.environ['SSL_CERT_FILE'] = certifi.where()
-                    os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
-                    print(f"DEBUG: SSL_CERT_FILE set to (certifi.where()): {certifi.where()}")
-                except Exception as e:
-                    print(f"WARNING: Could not find certifi certificate: {e}")
+
+        # Force requests to use certifi's bundled CA (works in dev and PyInstaller builds)
+        cert_path = certifi.where()
+        if os.path.exists(cert_path):
+            os.environ['SSL_CERT_FILE'] = cert_path
+            os.environ['REQUESTS_CA_BUNDLE'] = cert_path
+            print(f"DEBUG: SSL_CERT_FILE set to: {cert_path}")
+        else:
+            print(f"WARNING: certifi bundle not found at: {cert_path}")
         
         self.translator = GoogleTranslator(source='auto', target='vi')
         self.trigger_translation = False

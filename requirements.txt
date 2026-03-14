@@ -3,3 +3,4 @@ pynput
 pyperclip
 deep-translator
 pyobjc-framework-Cocoa
+certifi
